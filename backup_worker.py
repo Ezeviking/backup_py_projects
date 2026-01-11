@@ -7,6 +7,7 @@ DEFAULT_EXCLUDE_PATTERNS = {
     "*.png", "*.jpg", "*.jpeg", "*.gif", "*.log"
 }
 
+
 def should_exclude(path: Path, root: Path) -> bool:
     """Проверяет, нужно ли исключить файл/папку."""
     rel_parts = path.relative_to(root).parts
@@ -22,6 +23,7 @@ def should_exclude(path: Path, root: Path) -> bool:
         return True
 
     return False
+
 
 def simulate_backup(project_path: str, target_format: str) -> str:
     """
