@@ -67,6 +67,7 @@ class ProjectBackupApp(QMainWindow):
         self.backup_button = QPushButton("Create Backup")
         self.prepare_qwen_button = QPushButton("Prepare for Qwen")
         self.save_filter_button = QPushButton("Save Filter State")
+        self.canvas_qwen_button = QPushButton("One Canvas for Qwen")
         self.save_filter_button.clicked.connect(self.save_current_filter_state)
         self.select_all_button = QPushButton("Select All Files")
         self.clear_selection_button = QPushButton("Clear Selection")
@@ -74,6 +75,7 @@ class ProjectBackupApp(QMainWindow):
         action_layout.addWidget(self.backup_button)
         action_layout.addWidget(self.prepare_qwen_button)
         action_layout.addWidget(self.save_filter_button)
+        action_layout.addWidget(self.canvas_qwen_button)
         action_layout.addWidget(self.select_all_button)
         action_layout.addWidget(self.clear_selection_button)
         action_layout.addStretch()
@@ -106,6 +108,7 @@ class ProjectBackupApp(QMainWindow):
         self.project_combo.currentTextChanged.connect(self.load_project_structure)
         self.backup_button.clicked.connect(self.create_backup)
         self.prepare_qwen_button.clicked.connect(self.prepare_for_qwen)
+        self.canvas_qwen_button.clicked.connect(self.export_one_canvas_for_qwen)
         self.select_all_button.clicked.connect(self.select_all_files)
         self.clear_selection_button.clicked.connect(self.clear_file_selection)
 
@@ -620,6 +623,76 @@ class ProjectBackupApp(QMainWindow):
     def toggle_excluded_visibility(self):
         """Переключает видимость исключенных элементов"""
         self.apply_exclusion_filter()
+
+    def build_project_structure(self, selected_files, project_root):
+        tree = {}
+        for file_path in selected_files:
+            rel = os.path.relpath(file_path, project_root)
+            parts = rel.split(os.sep)
+            node = tree
+            for part in parts:
+                node = node.setdefault(part, {})
+        return tree
+
+    def format_structure(self, tree, indent=0):
+        lines = []
+        for key in sorted(tree.keys()):
+            lines.append("  " * indent + f"- {key}")
+            if tree[key]:
+                lines.extend(self.format_structure(tree[key], indent + 1))
+        return lines
+
+    def export_one_canvas_for_qwen(self):
+        project_name = self.project_combo.currentText()
+        if not project_name:
+            QMessageBox.warning(self, "Warning", "Select project first.")
+            return
+
+        project_root = os.path.join(self.projects_dir, project_name)
+        selected_files = self.get_checked_files()
+
+        if not selected_files:
+            QMessageBox.warning(self, "Warning", "No files selected.")
+            return
+
+        # ---- STRUCTURE ----
+        structure_tree = self.build_project_structure(selected_files, project_root)
+        structure_text = "\n".join(self.format_structure(structure_tree))
+
+        canvas = []
+        canvas.append(f"PROJECT: {project_name}\n")
+        canvas.append("STRUCTURE:")
+        canvas.append(structure_text)
+        canvas.append("\n")
+
+        # ---- FILES ----
+        for file_path in selected_files:
+            rel = os.path.relpath(file_path, project_root)
+
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    code = f.read()
+            except Exception as e:
+                code = f"# ERROR READING FILE: {e}"
+
+            canvas.append(
+                "\n" + "=" * 50 +
+                f"\n# FILE: {rel}\n" +
+                "=" * 50 + "\n"
+                           "```python\n" +
+                code +
+                "\n```\n"
+            )
+
+        result = "\n".join(canvas)
+
+        QApplication.clipboard().setText(result)
+
+        QMessageBox.information(
+            self,
+            "Done",
+            "One canvas copied to clipboard.\nPaste it directly into Qwen."
+        )
 
 
 def main():
